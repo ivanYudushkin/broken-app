@@ -191,3 +191,29 @@ flamegraph-windows.ps1 нужен для нормального отображе
 В slow_fib много вызовов slow_fib на разных уровнях стека
 
 ![Flamegraph](flamegraph.svg)
+
+## Criterion
+
+```bash
+cargo bench --bench criterion
+```
+
+```text
+sum_even_broken         time:   [211.91 ps 212.29 ps 212.69 ps]
+Found 11 outliers among 100 measurements (11.00%)
+  5 (5.00%) high mild
+  6 (6.00%) high severe
+
+slow_fib_broken         time:   [4.2790 ms 4.2882 ms 4.2991 ms]
+Found 12 outliers among 100 measurements (12.00%)
+  4 (4.00%) high mild
+  8 (8.00%) high severe
+
+slow_dedup_broken       time:   [10.755 ms 10.770 ms 10.787 ms]
+Found 6 outliers among 100 measurements (6.00%)
+  4 (4.00%) high mild
+  2 (2.00%) high severe
+```
+
+![Criterion](target\criterion\report\index.html)
+

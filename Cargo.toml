@@ -22,3 +22,7 @@ debug = true
 inherits = "release"
 debug = 2
 strip = "none"
+
+[[bench]]
+name = "criterion"
+harness = false
