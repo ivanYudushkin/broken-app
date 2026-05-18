@@ -215,5 +215,7 @@ Found 6 outliers among 100 measurements (6.00%)
   2 (2.00%) high severe
 ```
 
-![Criterion](target\criterion\report\index.html)
+![slow_dedup_broken](slow_dedup_broken.png)
+![slow_fib_broken](slow_fib_broken.png)
+![sum_even_broken](sum_even_broken.png)
 
