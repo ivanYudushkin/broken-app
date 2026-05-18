@@ -1,0 +1,6 @@
+slow_fib: 5.144946ms
+slow_dedup: 8.259715ms
+slow_fib: 4.663762ms
+slow_dedup: 8.362795ms
+slow_fib: 4.710503ms
+slow_dedup: 8.462111ms
