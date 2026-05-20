@@ -6,14 +6,14 @@ pub mod concurrency;
 /// из-за чего возникает UB при доступе за пределы среза.
 pub fn sum_even(values: &[i64]) -> i64 {
     let mut acc = 0;
-    // unsafe {
-    //     for idx in 0..=values.len() {
-    //         let v = *values.get_unchecked(idx);
-    //         if v % 2 == 0 {
-    //             acc += v;
-    //         }
-    //     }
-    // }
+    unsafe {
+        for idx in 0..=values.len() - 1 {
+            let v = *values.get_unchecked(idx);
+            if v % 2 == 0 {
+                acc += v;
+            }
+        }
+    }
     acc
 }
 
@@ -22,7 +22,8 @@ pub fn sum_even(values: &[i64]) -> i64 {
 pub fn leak_buffer(input: &[u8]) -> usize {
     let boxed = input.to_vec().into_boxed_slice();
     let len = input.len();
-    let raw = Box::into_raw(boxed) as *mut u8;
+    let raw_slice = Box::into_raw(boxed);
+    let raw = raw_slice as *mut u8;
 
     let mut count = 0;
     unsafe {
@@ -31,7 +32,7 @@ pub fn leak_buffer(input: &[u8]) -> usize {
                 count += 1;
             }
         }
-        // утечка: не вызываем Box::from_raw(raw);
+        drop(Box::from_raw(raw_slice));
     }
     count
 }
@@ -39,25 +40,38 @@ pub fn leak_buffer(input: &[u8]) -> usize {
 /// Небрежная нормализация строки: удаляем пробелы и приводим к нижнему регистру,
 /// но игнорируем повторяющиеся пробелы/табуляции внутри текста.
 pub fn normalize(input: &str) -> String {
-    input.replace(' ', "").to_lowercase()
+    input.chars()
+        .filter(|c| !c.is_whitespace())  // пробел, \n, \t, \r, …
+        .collect::<String>()
+        .to_lowercase()
 }
 
 /// Логическая ошибка: усредняет по всем элементам, хотя требуется учитывать
 /// только положительные. Деление на длину среза даёт неверный результат.
 pub fn average_positive(values: &[i64]) -> f64 {
-    let sum: i64 = values.iter().sum();
     if values.is_empty() {
         return 0.0;
     }
-    sum as f64 / values.len() as f64
+
+    let mut sum_positive = 0;
+    let mut len_positive = 0;
+
+    for v in values {
+        if v.is_positive() {
+            sum_positive += *v;
+            len_positive += 1
+        }
+    }
+
+    sum_positive as f64 / len_positive as f64
 }
 
 /// Use-after-free: возвращает значение после освобождения бокса.
 /// UB, проявится под ASan/Miri.
 pub unsafe fn use_after_free() -> i32 {
     let b = Box::new(42_i32);
-    let raw = Box::into_raw(b);
+    let raw = Box::into_pin(b);
     let val = *raw;
-    drop(Box::from_raw(raw));
+    // drop(Box::from_raw(raw));
     val + *raw
 }

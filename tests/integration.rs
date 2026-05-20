@@ -1,10 +1,15 @@
-use broken_app::{algo, leak_buffer, normalize, sum_even};
+use broken_app::{algo, leak_buffer, normalize, sum_even, use_after_free};
 
 #[test]
 fn sums_even_numbers() {
     let nums = [1, 2, 3, 4];
     // Ожидаем корректное суммирование: 2 + 4 = 6.
     assert_eq!(sum_even(&nums), 6);
+}
+
+#[test]
+fn test_use_after_free() {
+    assert_eq!(unsafe { use_after_free() }, 84);
 }
 
 #[test]
@@ -26,12 +31,12 @@ fn fib_small_numbers() {
 
 #[test]
 fn normalize_simple() {
-    assert_eq!(normalize(" Hello World "), "helloworld");
+    assert_eq!(normalize("\t   Hello  \n  \n     World   "), "helloworld");
 }
 
 #[test]
 fn averages_only_positive() {
-    let nums = [-5, 5, 15];
+    let nums = [-5, -10, 5, 15];
     // Ожидается (5 + 15) / 2 = 10, но текущая реализация делит на все элементы.
     assert!((broken_app::average_positive(&nums) - 10.0).abs() < f64::EPSILON);
 }
