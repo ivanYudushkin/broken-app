@@ -1,7 +1,7 @@
 # broken-app — отчёт по исправлениям
 
 Проверки до фиксов можно посмотреть в отдельной ветке `before_fix`:  
-<https://github.com/ivanYudushkin/broken-app/tree/before-fix>
+[https://github.com/ivanYudushkin/broken-app/tree/before-fix](https://github.com/ivanYudushkin/broken-app/tree/before-fix)
 
 ---
 
@@ -251,7 +251,7 @@ dedup: [1, 2, 3, 4]
 Начну с того, что избавлюсь от широкого блока `sort_unstable` (~20% для `slow_dedup`).  
 Убираю ненужную сортировку и смотрю на flamegraph:
 
-![Flamegraph: slow_dedup без sort_unstable](slow_dedub_wout_sort.png)
+Flamegraph: slow_dedup без sort_unstable
 
 Теперь нет тяжёлых лишних операций внутри `slow_dedup`, но `slow_dedup` всё ещё занимает 50% времени `main`.
 
@@ -287,7 +287,7 @@ fast_dedup: 232.34µs
 
 Посмотрим flamegraph:
 
-![Flamegraph: fast_dedup](fast_dedup.png)
+Flamegraph: fast_dedup
 
 Основную часть теперь занимает `slow_fib`. Оптимизируем её.
 
@@ -329,7 +329,7 @@ fast_fib: 72ns
 
 В результате флеймграф теперь выглядит вот так:
 
-![Flamegraph: итоговый профиль](flamegraph.svg)
+Flamegraph: итоговый профиль
 
 ---
 
@@ -446,8 +446,8 @@ slow_dedup_broken       time:   [204.51 µs 205.23 µs 205.86 µs]
 
 Отчёты Criterion:
 
-![Criterion: fast_fib](fast_fib.png)
-![Criterion: fust_dedup](fast_dedub.png)
+Criterion: fast_fib
+Criterion: fust_dedup
 
 ### Финально: Miri и Valgrind
 
@@ -515,3 +515,235 @@ ivany@PC-IY:/mnt/c/Users/ivany/Desktop/Rust_YP/broken-app$ cargo check
     Checking broken-app v0.1.0 (/mnt/c/Users/ivany/Desktop/Rust_YP/broken-app)
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.62s
 ```
+
+---
+
+## 8. Доработки: `concurrency`
+
+### `race_increment` — тест
+
+Добавим тест:
+
+```rust
+#[test]
+fn test_race_increment() {
+    assert_eq!(concurrency::race_increment(2, 2), 4);
+}
+```
+
+```bash
+cargo test --test integration test_race_increment -- --exact
+```
+
+```text
+running 1 test
+test test_race_increment ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.00s
+```
+
+Добавим в `demo` и запустим Miri (**без** `RUSTFLAGS` с санитайзером):
+
+```bash
+unset RUSTFLAGS
+cargo +nightly miri run
+```
+
+Miri ругается на гонку:
+
+```text
+error: Undefined Behavior: Data race detected between (1) non-atomic write on thread `unnamed-2` and (2) non-atomic read on thread `unnamed-1` at alloc8614
+  --> src/concurrency.rs:15:21
+   |
+15 |                     COUNTER += 1;
+   |                     ^^^^^^^^^^^^ (2) just happened here
+   |
+help: and (1) occurred earlier here
+  --> src/concurrency.rs:15:21
+   |
+15 |                     COUNTER += 1;
+   |                     ^^^^^^^^^^^^
+   = help: this indicates a bug in the program: it performed an invalid operation, and caused Undefined Behavior
+   = help: see https://doc.rust-lang.org/nightly/reference/behavior-considered-undefined.html for further information
+   = note: this is on thread `unnamed-1`
+note: the current function got called indirectly due to this code
+  --> src/concurrency.rs:12:22
+   |
+12 |           handles.push(thread::spawn(move || {
+   |  ______________________^
+13 | |             for _ in 0..iterations {
+14 | |                 unsafe {
+15 | |                     COUNTER += 1;
+...  |
+18 | |         }));
+   | |__________^
+
+note: some details are omitted, run with `MIRIFLAGS=-Zmiri-backtrace=full` for a verbose backtrace
+
+error: aborting due to 1 previous error
+```
+
+### TSan (до исправления)
+
+```bash
+RUSTFLAGS="-Zsanitizer=thread -Cpanic=abort" \
+  cargo +nightly build --bin demo \
+  -Zbuild-std=std,panic_abort \
+  --target x86_64-unknown-linux-gnu
+
+./target/x86_64-unknown-linux-gnu/debug/demo
+```
+
+```text
+SUMMARY: ThreadSanitizer: data race .../src/concurrency.rs:15 in broken_app::concurrency::race_increment::{closure#0}
+==================
+race: 4
+ThreadSanitizer: reported 1 warnings
+```
+
+Тоже сообщение о data race (значение `race: 4` может совпасть, но поведение не определено).
+
+### Исправление: счётчик через атомик
+
+Сделаю реализацию счетчика через атомик:
+
+```rust
+static COUNTER: AtomicU64 = AtomicU64::new(0);
+
+pub fn race_increment(iterations: usize, threads: usize) -> u64 {
+    COUNTER.store(0, Ordering::Relaxed);
+    let mut handles = Vec::new();
+    for _ in 0..threads {
+        handles.push(thread::spawn(move || {
+            for _ in 0..iterations {
+                COUNTER.fetch_add(1, Ordering::Relaxed);
+            }
+        }));
+    }
+    for h in handles {
+        let _ = h.join();
+    }
+    COUNTER.load(Ordering::Relaxed)
+}
+```
+
+Снова проверим TSan:
+
+```bash
+RUSTFLAGS="-Zsanitizer=thread -Cpanic=abort" \
+  cargo +nightly build --bin demo \
+  -Zbuild-std=std,panic_abort \
+  --target x86_64-unknown-linux-gnu
+
+./target/x86_64-unknown-linux-gnu/debug/demo
+```
+
+```text
+ivany@PC-IY:/mnt/c/Users/ivany/Desktop/Rust_YP/broken-app$ ./target/x86_64-unknown-linux-gnu/debug/demo
+sum_even: 6
+non-zero bytes: 3
+normalize: helloworld
+fib(20): 6765
+dedup: [1, 2, 3, 4]
+race: 4
+```
+
+Гонки нет.
+
+### `read_after_sleep` и `reset_counter`
+
+Так же убрал unsafe блоки — работа с тем же `COUNTER`:
+
+Добавим в demo
+
+```rust
+pub fn read_after_sleep() -> u64 {
+    thread::sleep(Duration::from_millis(10));
+    COUNTER.load(Ordering::Relaxed)
+}
+
+pub fn reset_counter() {
+    COUNTER.store(0, Ordering::Relaxed);
+}
+```
+
+Добавим в demo
+
+### Финальная проверка
+
+#### Miri
+
+```bash
+unset RUSTFLAGS
+cargo +nightly miri run
+```
+
+```text
+ivany@PC-IY:/mnt/c/Users/ivany/Desktop/Rust_YP/broken-app$ cargo +nightly miri run
+   Compiling broken-app v0.1.0 (/mnt/c/Users/ivany/Desktop/Rust_YP/broken-app)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.83s
+     Running `.../cargo-miri runner target/miri/x86_64-unknown-linux-gnu/debug/demo`
+sum_even: 6
+non-zero bytes: 3
+normalize: helloworld
+fib(20): 6765
+dedup: [1, 2, 3, 4]
+race: 4
+read_after_sleep: 4
+```
+
+Ошибок UB нет
+
+#### TSan
+
+```bash
+unset RUSTFLAGS
+cargo clean
+
+RUSTFLAGS="-Zsanitizer=thread -Cpanic=abort" \
+  cargo +nightly build --bin demo \
+  -Zbuild-std=std,panic_abort \
+  --target x86_64-unknown-linux-gnu
+
+./target/x86_64-unknown-linux-gnu/debug/demo
+```
+
+```text
+ivany@PC-IY:/mnt/c/Users/ivany/Desktop/Rust_YP/broken-app$ ./target/x86_64-unknown-linux-gnu/debug/demo
+sum_even: 6
+non-zero bytes: 3
+normalize: helloworld
+fib(20): 6765
+dedup: [1, 2, 3, 4]
+race: 4
+read_after_sleep: 4
+```
+
+Предупреждений о data race нет
+
+#### ASan
+
+```bash
+unset RUSTFLAGS
+cargo clean
+
+RUSTFLAGS="-Zsanitizer=address -Cpanic=abort" \
+  cargo +nightly build --bin demo \
+  -Zbuild-std=std,panic_abort \
+  --target x86_64-unknown-linux-gnu
+
+./target/x86_64-unknown-linux-gnu/debug/demo
+```
+
+```text
+ivany@PC-IY:/mnt/c/Users/ivany/Desktop/Rust_YP/broken-app$ ./target/x86_64-unknown-linux-gnu/debug/demo
+sum_even: 6
+non-zero bytes: 3
+normalize: helloworld
+fib(20): 6765
+dedup: [1, 2, 3, 4]
+race: 4
+read_after_sleep: 4
+```
+
+Ошибок ASan нет

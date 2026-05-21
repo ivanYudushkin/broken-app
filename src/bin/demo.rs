@@ -1,4 +1,4 @@
-use broken_app::{algo, leak_buffer, normalize, sum_even, use_after_free};
+use broken_app::{algo, leak_buffer, normalize, sum_even, use_after_free, concurrency};
 
 fn main() {
     let nums = [1, 2, 3, 4];
@@ -15,6 +15,13 @@ fn main() {
 
     let uniq = algo::slow_dedup(&[1, 2, 2, 3, 1, 4, 4]);
     println!("dedup: {:?}", uniq);
+
+    let race = concurrency::race_increment(2, 2);
+    println!("race: {}", race);
+
+    println!("read_after_sleep: {}", concurrency::read_after_sleep());
+
+    concurrency::reset_counter();
 
     // let uniq = algo::fast_dedup(&[1, 2, 2, 3, 1, 4, 4]);
     // println!("dedup: {:?}", uniq);

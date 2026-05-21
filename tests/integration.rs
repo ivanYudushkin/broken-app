@@ -1,4 +1,4 @@
-use broken_app::{algo, leak_buffer, normalize, sum_even, use_after_free};
+use broken_app::{algo, leak_buffer, normalize, sum_even, use_after_free, concurrency};
 
 #[test]
 fn sums_even_numbers() {
@@ -39,4 +39,9 @@ fn averages_only_positive() {
     let nums = [-5, -10, 5, 15];
     // Ожидается (5 + 15) / 2 = 10, но текущая реализация делит на все элементы.
     assert!((broken_app::average_positive(&nums) - 10.0).abs() < f64::EPSILON);
+}
+
+#[test]
+fn test_race_increment() {
+    assert_eq!(concurrency::race_increment(2,2), 4);
 }
