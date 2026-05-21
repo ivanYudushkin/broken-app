@@ -542,7 +542,7 @@ test test_race_increment ... ok
 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.00s
 ```
 
-Добавим в `demo` и запустим Miri (**без** `RUSTFLAGS` с санитайзером):
+Добавим в `demo` и запустим Miri:
 
 ```bash
 unset RUSTFLAGS
@@ -601,7 +601,7 @@ race: 4
 ThreadSanitizer: reported 1 warnings
 ```
 
-Тоже сообщение о data race (значение `race: 4` может совпасть, но поведение не определено).
+Тоже сообщение о data race
 
 ### Исправление: счётчик через атомик
 
@@ -648,11 +648,11 @@ dedup: [1, 2, 3, 4]
 race: 4
 ```
 
-Гонки нет.
+Гонки нет
 
 ### `read_after_sleep` и `reset_counter`
 
-Так же убрал unsafe блоки — работа с тем же `COUNTER`:
+Так же убрал unsafe блоки
 
 Добавим в demo
 
