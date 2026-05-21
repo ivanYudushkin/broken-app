@@ -654,8 +654,6 @@ race: 4
 
 Так же убрал unsafe блоки
 
-Добавим в demo
-
 ```rust
 pub fn read_after_sleep() -> u64 {
     thread::sleep(Duration::from_millis(10));
